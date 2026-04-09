@@ -1,0 +1,71 @@
+import { useEffect, useState } from 'react';
+import { db } from '../firebase';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+
+export default function AnnouncementToast() {
+  const [announcement, setAnnouncement] = useState(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    // Listen to the latest announcement
+    const q = query(
+      collection(db, 'announcements'),
+      orderBy('created_at', 'desc'),
+      limit(1)
+    );
+
+    let isFirst = true;
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Skip the initial load
+      if (isFirst) {
+        isFirst = false;
+        return;
+      }
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          setAnnouncement({
+            id: change.doc.id,
+            message: data.message,
+            target_zone: data.target_zone,
+            created_at: data.created_at,
+          });
+          setVisible(true);
+
+          // Auto-hide after 8 seconds
+          setTimeout(() => {
+            setVisible(false);
+          }, 8000);
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (!visible || !announcement) return null;
+
+  return (
+    <div className="announcement-toast">
+      <div className="announcement-toast-inner">
+        <div className="announcement-toast-header">
+          <span className="announcement-toast-label">📢 Announcement</span>
+          <button
+            className="announcement-toast-close"
+            onClick={() => setVisible(false)}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="announcement-toast-message">
+          {announcement.message}
+        </div>
+        <div className="announcement-toast-zone">
+          Target: {announcement.target_zone === 'all' ? 'All Zones' : announcement.target_zone}
+        </div>
+      </div>
+    </div>
+  );
+}
