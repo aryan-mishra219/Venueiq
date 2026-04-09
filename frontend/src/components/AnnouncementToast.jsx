@@ -1,48 +1,67 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 export default function AnnouncementToast() {
   const [announcement, setAnnouncement] = useState(null);
   const [visible, setVisible] = useState(false);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    // Listen to the latest announcement
-    const q = query(
-      collection(db, 'announcements'),
-      orderBy('created_at', 'desc'),
-      limit(1)
-    );
+    let unsubscribe = null;
 
-    let isFirst = true;
+    try {
+      const q = query(
+        collection(db, 'announcements'),
+        orderBy('created_at', 'desc'),
+        limit(1)
+      );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      // Skip the initial load
-      if (isFirst) {
-        isFirst = false;
-        return;
-      }
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          // Skip the initial load
+          if (isFirstLoad.current) {
+            isFirstLoad.current = false;
+            return;
+          }
 
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          setAnnouncement({
-            id: change.doc.id,
-            message: data.message,
-            target_zone: data.target_zone,
-            created_at: data.created_at,
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const data = change.doc.data();
+              setAnnouncement({
+                id: change.doc.id,
+                message: data.message,
+                target_zone: data.target_zone,
+                created_at: data.created_at,
+              });
+              setVisible(true);
+
+              // Auto-hide after 8 seconds
+              setTimeout(() => {
+                setVisible(false);
+              }, 8000);
+            }
           });
-          setVisible(true);
-
-          // Auto-hide after 8 seconds
-          setTimeout(() => {
-            setVisible(false);
-          }, 8000);
+        },
+        (error) => {
+          // Silently handle Firestore errors — don't crash the app
+          console.warn('AnnouncementToast listener error (non-fatal):', error.message);
         }
-      });
-    });
+      );
+    } catch (err) {
+      console.warn('AnnouncementToast setup error (non-fatal):', err.message);
+    }
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    };
   }, []);
 
   if (!visible || !announcement) return null;

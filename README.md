@@ -134,4 +134,3 @@ venueiq/
 ## 📄 License
 
 MIT
-

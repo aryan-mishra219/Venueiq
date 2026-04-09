@@ -62,6 +62,13 @@ async def join_queue(request: QueueJoinRequest):
         
         members_ref.document(member_id).set(member_data)
         
+        # New: Register member globally for tracking retrieval
+        db.collection("members_registry").document(member_id).set({
+            "name": request.name.lower(),
+            "zone_id": request.zone_id,
+            "joined_at": SERVER_TIMESTAMP
+        })
+        
         estimated_wait = (next_position - 1) * ESTIMATED_MINUTES_PER_PERSON
         
         return {
@@ -188,6 +195,43 @@ async def pause_queue(request: QueuePauseRequest):
         zone_ref.update({"queue_paused": request.paused})
         
         return {"success": True, "paused": request.paused}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/track/{member_id}")
+async def track_queue_member(member_id: str, name: str):
+    """Retrieve queue info for an existing member ID and name."""
+    try:
+        # Check global registry
+        registry_ref = db.collection("members_registry").document(member_id)
+        register_doc = registry_ref.get()
+        
+        if not register_doc.exists:
+            raise HTTPException(status_code=404, detail="Ticket ID not found")
+        
+        reg_data = register_doc.to_dict()
+        if reg_data.get("name") != name.lower().strip():
+            raise HTTPException(status_code=403, detail="Name does not match Ticket ID")
+        
+        zone_id = reg_data.get("zone_id")
+        
+        # Get live status
+        member_ref = db.collection("queues").document(zone_id).collection("members").document(member_id)
+        member_doc = member_ref.get()
+        
+        if not member_doc.exists:
+            # Maybe they were deleted or are done?
+            raise HTTPException(status_code=404, detail="Ticket exists but queue record is missing")
+            
+        member_data = member_doc.to_dict()
+        
+        return {
+            "member_id": member_id,
+            "zone_id": zone_id,
+            "position": member_data.get("position", 0),
+            "status": member_data.get("status", "waiting")
+        }
     except HTTPException:
         raise
     except Exception as e:

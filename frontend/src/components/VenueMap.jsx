@@ -5,8 +5,8 @@ import 'leaflet/dist/leaflet.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// Venue center coordinates (MSG-inspired layout)
-const VENUE_CENTER = [40.7512, -73.9930];
+// Default fallback center (Narendra Modi Stadium)
+const VENUE_CENTER = [23.0919, 72.5975];
 const VENUE_ZOOM = 17;
 
 // Helper to get congestion level
@@ -85,7 +85,9 @@ function findLeastCrowdedPath(zones, fromId, toId) {
     if (current === null || current === toId) break;
     unvisited.delete(current);
 
-    const neighbors = ZONE_ADJACENCY[current] || [];
+    // Get neighbors: Use hardcoded map if exists, otherwise assume all zones in the venue are connected
+    const neighbors = ZONE_ADJACENCY[current] || zones.map(z => z.id).filter(id => id !== current);
+    
     for (const neighbor of neighbors) {
       if (!unvisited.has(neighbor)) continue;
       const weight = 1 + (zoneMap[neighbor]?.crowd_score || 0);
@@ -112,8 +114,13 @@ function MapBoundsUpdater({ zones }) {
   const map = useMap();
   useEffect(() => {
     if (zones.length > 0) {
-      const bounds = zones.map(z => z.coordinates);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+      const bounds = zones
+        .map(z => z.coordinates)
+        .filter(coords => Array.isArray(coords) && coords.length === 2 && !coords.some(c => c === undefined || c === null));
+      
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+      }
     }
   }, [zones, map]);
   return null;

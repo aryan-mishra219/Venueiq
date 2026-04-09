@@ -15,8 +15,8 @@ function App() {
           <div className="navbar-brand">
             <div className="navbar-logo">V</div>
             <div>
-              <div className="navbar-title">VenueIQ</div>
-              <div className="navbar-subtitle">Crowd Intelligence</div>
+              <div className="navbar-title">VenueIQ Bharat</div>
+              <div className="navbar-subtitle">CROWD INTELLIGENCE</div>
             </div>
           </div>
           <div className="navbar-links">

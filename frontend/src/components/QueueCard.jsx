@@ -1,47 +1,65 @@
-export default function QueueCard({ position, estimatedWait, status, name, zone }) {
+export default function QueueCard({ position, estimatedWait, status, name, zone, memberId }) {
   const isYourTurn = status === 'your_turn';
+  const isDone = status === 'done';
 
   return (
-    <div className={`queue-status-card ${isYourTurn ? 'your-turn' : ''}`}>
-      {/* Status label */}
-      <div className="queue-status-label">
-        {isYourTurn ? "🎉 It's Your Turn!" : `You're in line at ${zone}`}
+    <div className={`queue-status-card premium-pass ${isYourTurn ? 'active-turn' : ''} ${isDone ? 'completed-pass' : ''}`}>
+      {/* Pass Header */}
+      <div className="pass-header">
+        <div className="pass-chip">V-IQ SMART PASS</div>
+        <div className="pass-id">ID: {memberId || '-------'}</div>
       </div>
 
-      {/* Big position number */}
-      <div className={`queue-position ${isYourTurn ? 'your-turn' : ''}`}>
-        #{position}
-      </div>
-
-      {/* Wait info */}
-      {!isYourTurn && (
-        <>
-          <div className="queue-wait-time">
-            ~{estimatedWait} min
-          </div>
-          <div className="queue-status-label">estimated wait time</div>
-        </>
-      )}
-
-      {/* YOUR TURN alert */}
-      {isYourTurn && (
-        <div className="queue-your-turn-alert">
-          <h3>🟢 YOUR TURN</h3>
-          <p>Please proceed to the counter now!</p>
+      <div className="pass-body">
+        <div className="pass-user-info">
+          <div className="pass-label">ATTENDEE</div>
+          <div className="pass-value">{name || 'Guest'}</div>
         </div>
-      )}
+        
+        <div className="pass-zone-info">
+          <div className="pass-label">LOCATION</div>
+          <div className="pass-value">{zone}</div>
+        </div>
+      </div>
 
-      {/* Done status */}
-      {status === 'done' && (
-        <div style={{
-          marginTop: '20px',
-          padding: '16px',
-          background: 'rgba(68, 138, 255, 0.15)',
-          borderRadius: '12px',
-          border: '1px solid rgba(68, 138, 255, 0.3)',
-        }}>
-          <h3 style={{ color: '#448aff', fontSize: '18px', marginBottom: '4px' }}>✅ Completed</h3>
-          <p style={{ color: '#9aa0a6', fontSize: '13px' }}>Thank you for your patience, {name}!</p>
+      <div className="pass-divider">
+        <div className="pass-notch left"></div>
+        <div className="pass-notch right"></div>
+      </div>
+
+      <div className="pass-footer">
+        {isDone ? (
+          <div className="pass-status-final">
+            <span className="icon">✅</span>
+            <div>
+              <div className="status-title">SERVICED</div>
+              <div className="status-time">Thanks for your patience</div>
+            </div>
+          </div>
+        ) : isYourTurn ? (
+          <div className="pass-status-active">
+            <span className="pulse-icon">🟢</span>
+            <div>
+              <div className="status-title">YOUR TURN</div>
+              <div className="status-subtitle">Proceed to Counter</div>
+            </div>
+          </div>
+        ) : (
+          <div className="pass-status-waiting">
+            <div className="pass-position-big">
+              <span className="pos-hash">#</span>{position}
+            </div>
+            <div className="pass-wait-details">
+              <div className="wait-label">In Queue</div>
+              <div className="wait-value">~{estimatedWait} min</div>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {isYourTurn && (
+        <div className="pass-entry-instruction">
+          Please show this pass to the staff member
         </div>
       )}
     </div>
