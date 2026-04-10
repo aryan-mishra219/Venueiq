@@ -1,3 +1,5 @@
+import { CheckCircle, CircleDot } from 'lucide-react';
+
 export default function QueueCard({ position, estimatedWait, status, name, zone, memberId }) {
   const isYourTurn = status === 'your_turn';
   const isDone = status === 'done';
@@ -30,7 +32,7 @@ export default function QueueCard({ position, estimatedWait, status, name, zone,
       <div className="pass-footer">
         {isDone ? (
           <div className="pass-status-final">
-            <span className="icon">✅</span>
+            <span className="icon"><CheckCircle size={24} color="#00e676" /></span>
             <div>
               <div className="status-title">SERVICED</div>
               <div className="status-time">Thanks for your patience</div>
@@ -38,7 +40,7 @@ export default function QueueCard({ position, estimatedWait, status, name, zone,
           </div>
         ) : isYourTurn ? (
           <div className="pass-status-active">
-            <span className="pulse-icon">🟢</span>
+            <span className="pulse-icon"><CircleDot size={22} color="#00e676" /></span>
             <div>
               <div className="status-title">YOUR TURN</div>
               <div className="status-subtitle">Proceed to Counter</div>

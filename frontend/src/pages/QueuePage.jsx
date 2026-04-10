@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { QRCode } from 'react-qr-code';
 import toast from 'react-hot-toast';
+import { Ticket, Search, QrCode, ArrowLeft } from 'lucide-react';
 import QueueCard from '../components/QueueCard';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -14,6 +15,7 @@ export default function QueuePage() {
   const [selectedZone, setSelectedZone] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [joining, setJoining] = useState(false);
   const [queueInfo, setQueueInfo] = useState(null);  // { member_id, zone_id, position, estimated_wait_minutes }
   const [liveStatus, setLiveStatus] = useState(null); // Real-time status from Firestore
@@ -145,6 +147,7 @@ export default function QueuePage() {
           zone_id: selectedZone,
           name: name.trim(),
           phone: phone.trim(),
+          email: email.trim() || null,
         }),
       });
 
@@ -191,9 +194,9 @@ export default function QueuePage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Virtual Queue</h1>
+        <h1 className="page-title">VIRTUAL QUEUE</h1>
         <p className="page-subtitle">
-          Skip the physical line — join a virtual queue and get notified when it's your turn
+          SKIP THE PHYSICAL LINE — JOIN A VIRTUAL QUEUE AND GET NOTIFIED WHEN IT'S YOUR TURN
         </p>
       </div>
 
@@ -203,8 +206,10 @@ export default function QueuePage() {
           <>
             {!isTracking ? (
               <form className="queue-join-form" onSubmit={handleJoinQueue}>
-                <h3>🎫 Join a Queue</h3>
-                <p>Select a zone and enter your details to join the virtual queue</p>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Ticket size={20} /> JOIN QUEUE
+                </h3>
+                <p>SELECT A ZONE AND ENTER YOUR DETAILS TO JOIN THE VIRTUAL QUEUE</p>
 
                 <div className="form-group">
                   <label className="form-label">Select Venue</label>
@@ -267,12 +272,28 @@ export default function QueuePage() {
                   />
                 </div>
 
+                <div className="form-group">
+                  <label className="form-label">Email Address (Optional)</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="Receive an email when it's your turn"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <small style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                    We'll send you a professional notification so you don't miss your turn.
+                  </small>
+                </div>
+
                 <button
                   type="submit"
                   className="btn btn-primary"
                   disabled={joining}
                 >
-                  {joining ? 'Joining...' : '🎫 Join Queue'}
+                  {joining ? 'Joining...' : (
+                    <><Ticket size={16} /> Join Queue</>
+                  )}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '16px' }}>
@@ -288,7 +309,9 @@ export default function QueuePage() {
               </form>
             ) : (
               <form className="queue-join-form" onSubmit={handleTrackQueue}>
-                <h3>🔍 Track My Pass</h3>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Search size={20} /> Track My Pass
+                </h3>
                 <p>Enter your details to retrieve your active virtual ticket</p>
 
                 <div className="form-group">
@@ -320,7 +343,9 @@ export default function QueuePage() {
                   className="btn btn-primary"
                   disabled={joining}
                 >
-                  {joining ? 'Searching...' : '🔍 Restore Pass'}
+                  {joining ? 'Searching...' : (
+                    <><Search size={16} /> Restore Pass</>
+                  )}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '16px' }}>
@@ -330,7 +355,8 @@ export default function QueuePage() {
                     style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', fontSize: '13px' }}
                     onClick={() => { setIsTracking(false); setName(''); }}
                   >
-                    ← Back to Join Form
+                    <ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                    Back to Join Form
                   </button>
                 </div>
               </form>
@@ -338,7 +364,9 @@ export default function QueuePage() {
 
             {/* QR Code Section */}
             <div className="qr-section">
-              <h3>📱 Scan to Join Queue</h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <QrCode size={20} /> Scan to Join Queue
+              </h3>
               <p style={{ color: '#9aa0a6', fontSize: '13px', marginBottom: '16px' }}>
                 Share this QR code at stalls and entry points
               </p>
@@ -412,8 +440,9 @@ export default function QueuePage() {
                   setLiveStatus(null);
                   setName('');
                   setPhone('');
+                  setEmail('');
                   setSelectedZone('');
-                  toast('Left the queue', { icon: '👋' });
+                  toast('Left the queue');
                 }}
               >
                 Leave Queue
@@ -429,6 +458,7 @@ export default function QueuePage() {
                   setLiveStatus(null);
                   setName('');
                   setPhone('');
+                  setEmail('');
                   setSelectedZone('');
                 }}
               >

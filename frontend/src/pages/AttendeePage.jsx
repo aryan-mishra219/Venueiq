@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { Building2, Compass, BarChart2 } from 'lucide-react';
 import VenueMap from '../components/VenueMap';
 import ZoneCard from '../components/ZoneCard';
 
@@ -83,7 +84,7 @@ export default function AttendeePage() {
       // Server will confirm final score via Firestore snapshot anyway, 
       // but we can show a quick success toast.
       toast.success(
-        `Reported ${reportType === 'crowded' ? '🔴 Crowded' : '🟢 Clear'}`,
+        `Reported ${reportType === 'crowded' ? 'Crowded' : 'Clear'}`,
         { duration: 1500 }
       );
     } catch (err) {
@@ -107,16 +108,16 @@ export default function AttendeePage() {
     <div>
       {/* Page Header */}
       <div className="page-header">
-        <h1 className="page-title">Live Venue Map</h1>
+        <h1 className="page-title">LIVE VENUE MAP</h1>
         <p className="page-subtitle">
-          Real-time crowd density across all zones • Tap a zone to report congestion
+          REAL-TIME CROWD DENSITY ACROSS ALL ZONES • TAP A ZONE TO REPORT CONGESTION
         </p>
       </div>
 
       {/* Venue Selection Dropdown */}
       <div className="wayfinding-section" style={{ marginBottom: '16px', background: 'rgba(255, 255, 255, 0.03)' }}>
         <div className="section-title">
-          <span className="section-title-icon">🇮🇳</span>
+          <Building2 size={16} className="section-title-icon" />
           Current Venue
         </div>
         <div className="wayfinding-controls" style={{ padding: '0 24px 20px' }}>
@@ -141,7 +142,7 @@ export default function AttendeePage() {
       {/* Zone Search Controls */}
       <div className="wayfinding-section">
         <div className="section-title">
-          <span className="section-title-icon">🧭</span>
+          <Compass size={16} className="section-title-icon" />
           Find Zone
         </div>
         <div className="wayfinding-controls">
@@ -150,7 +151,7 @@ export default function AttendeePage() {
             value={wayfindingFrom}
             onChange={(e) => setWayfindingFrom(e.target.value)}
           >
-            <option value="">📍 Select a gate, stand or stall...</option>
+            <option value="">Select a gate, stand or stall...</option>
             {activeZones.map(zone => (
               <option key={zone.id} value={zone.id}>{zone.name}</option>
             ))}
@@ -167,21 +168,23 @@ export default function AttendeePage() {
         </div>
       </div>
 
-      {/* Interactive Map */}
+      {/* Interactive Map with Stadium BG */}
       <div className="map-wrapper">
-        <VenueMap
-          zones={activeZones}
-          onReport={handleReport}
-          wayfindingFrom={wayfindingFrom}
-          wayfindingTo={wayfindingTo}
-        />
+        <div className="stadium-bg-wrapper">
+          <VenueMap
+            zones={activeZones}
+            onReport={handleReport}
+            wayfindingFrom={wayfindingFrom}
+            wayfindingTo={wayfindingTo}
+          />
+        </div>
       </div>
 
       {/* Zone Cards Grid */}
       <div className="zones-section">
         <div className="section-title">
-          <span className="section-title-icon">📊</span>
-          Zone Overview
+          <BarChart2 size={16} className="section-title-icon" />
+          ZONE OVERVIEW
         </div>
         <div className="zones-grid">
           {activeZones.map(zone => (

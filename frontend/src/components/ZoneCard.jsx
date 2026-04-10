@@ -1,10 +1,10 @@
 import { getCongestionLevel, getScoreColor } from './VenueMap';
+import { DoorOpen, Utensils, Users, Car, MapPin, Ticket, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function ZoneCard({ zone, showActions = false, onReport, queueCount }) {
   const level = getCongestionLevel(zone.crowd_score);
   const color = getScoreColor(zone.crowd_score);
   const levelText = level === 'low' ? 'Low' : level === 'moderate' ? 'Moderate' : 'Crowded';
-  const typeIcons = { gate: '🚪', food: '🍔', restroom: '🚻', parking: '🅿️' };
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'N/A';
@@ -20,8 +20,12 @@ export default function ZoneCard({ zone, showActions = false, onReport, queueCou
     <div className={`zone-card ${level}`}>
       <div className="zone-card-header">
         <div>
-          <div className="zone-card-name">
-            {typeIcons[zone.type] || '📍'} {zone.name}
+          <div className="zone-card-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {zone.type === 'gate' ? <DoorOpen size={14} /> :
+             zone.type === 'food' ? <Utensils size={14} /> :
+             zone.type === 'restroom' ? <Users size={14} /> :
+             zone.type === 'parking' ? <Car size={14} /> :
+             <MapPin size={14} />} {zone.name}
           </div>
           <div className="zone-card-type">{zone.type}</div>
         </div>
@@ -42,9 +46,13 @@ export default function ZoneCard({ zone, showActions = false, onReport, queueCou
           Score: {zone.crowd_score}/10
         </span>
         {queueCount !== undefined && (
-          <span>🎫 Queue: {queueCount}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Ticket size={10} /> Queue: {queueCount}
+          </span>
         )}
-        <span>🕐 {formatTime(zone.last_updated)}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Clock size={10} /> {formatTime(zone.last_updated)}
+        </span>
       </div>
 
       {showActions && onReport && (
@@ -52,14 +60,16 @@ export default function ZoneCard({ zone, showActions = false, onReport, queueCou
           <button
             className="zone-card-btn danger"
             onClick={() => onReport(zone.id, 'crowded')}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
-            🔴 Report Crowded
+            <AlertCircle size={14} /> Report Crowded
           </button>
           <button
             className="zone-card-btn success"
             onClick={() => onReport(zone.id, 'clear')}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
-            🟢 Report Clear
+            <CheckCircle size={14} /> Report Clear
           </button>
         </div>
       )}

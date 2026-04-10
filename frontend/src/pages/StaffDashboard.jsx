@@ -1,31 +1,52 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import ZoneCard from '../components/ZoneCard';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShieldAlert, LayoutDashboard, Map, Users, Bell, Settings, Power, Zap, Mic } from 'lucide-react';
+import VenueMap from '../components/VenueMap';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const STAFF_PASSWORD = 'venue2024';
+
+// Helper: get congestion level from score
+const getLevel = (score) => score <= 3 ? 'nominal' : score <= 6 ? 'moderate' : 'dense';
+const getLevelLabel = (score) => score <= 3 ? 'NOMINAL' : score <= 6 ? 'MODERATE' : 'DENSE';
 
 export default function StaffDashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  
-  const [venues, setVenues] = useState([]); // New: Venue list
-  const [selectedVenueId, setSelectedVenueId] = useState(''); // New: Tier 1 selection
-  const [focusedZoneId, setFocusedZoneId] = useState(''); // Tier 2 selection
-  
+
+  const [venues, setVenues] = useState([]);
+  const [selectedVenueId, setSelectedVenueId] = useState('');
   const [zones, setZones] = useState([]);
   const [queueData, setQueueData] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Announcement form
+  // Announcement / Comms
   const [announcementMsg, setAnnouncementMsg] = useState('');
-  const [announcementTarget, setAnnouncementTarget] = useState('all');
   const [sending, setSending] = useState(false);
+  const [commsLog, setCommsLog] = useState([
+    { time: '10:42:31', sender: 'STF-09', type: 'staff', msg: 'NORTH GATE 4 OPENED. RELIEVING PRESSURE ON TURNSTILES 1-3.' },
+    { time: '10:42:18', sender: 'SYS_ADMIN', type: 'system', msg: 'AUTOMATED DRONE DEPLOYMENT FOR ZONE 16 COMPLETE. AERIAL FEED LIVE.' },
+    { time: '10:43:08', sender: 'OPERATOR', type: 'operator', msg: 'DISPATCHING MEDICAL TEAM TO SECTION 201. MINOR DISTRESS REPORTED.' },
+  ]);
 
-  // Check session storage and fetch venues
+  // Drill-down modal
+  const [drillZoneId, setDrillZoneId] = useState(null);
+
+  // Map Toggle
+  const [showLiveMap, setShowLiveMap] = useState(false);
+
+  const getVenueImage = (venueId) => {
+    if (venueId === 'bharat_mandapam') return '/stadium_radar_convention.png';
+    if (venueId === 'statue_of_unity') return '/stadium_radar_statue.png';
+    if (venueId === 'jio_world' || venueId === 'yashobhoomi') return '/stadium_radar_convention.png';
+    return '/stadium_radar_circular.png'; 
+  };
+
+  // Session
   useEffect(() => {
     const isAuth = sessionStorage.getItem('venueiq_staff_auth');
     if (isAuth === 'true') setAuthenticated(true);
@@ -45,22 +66,18 @@ export default function StaffDashboard() {
   // Real-time zones
   useEffect(() => {
     if (!authenticated) return;
-
     const unsubscribe = onSnapshot(collection(db, 'zones'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setZones(data);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [authenticated]);
 
-  // Fetch queue members for all zones
+  // Real-time queue members
   useEffect(() => {
     if (!authenticated || zones.length === 0) return;
-
     const unsubscribers = [];
-
     zones.forEach(zone => {
       const membersRef = collection(db, 'queues', zone.id, 'members');
       const unsub = onSnapshot(membersRef, (snapshot) => {
@@ -68,12 +85,10 @@ export default function StaffDashboard() {
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(m => m.status === 'waiting' || m.status === 'your_turn')
           .sort((a, b) => a.position - b.position);
-
         setQueueData(prev => ({ ...prev, [zone.id]: members }));
       });
       unsubscribers.push(unsub);
     });
-
     return () => unsubscribers.forEach(u => u());
   }, [authenticated, zones]);
 
@@ -89,111 +104,134 @@ export default function StaffDashboard() {
     }
   };
 
-  // Logout
   const handleLogout = () => {
     setAuthenticated(false);
     sessionStorage.removeItem('venueiq_staff_auth');
   };
 
-  // Advance queue
+  // Advance queue (Optimistic UI)
   const handleAdvanceQueue = useCallback(async (zoneId) => {
+    const previousQueue = queueData[zoneId] || [];
+    setQueueData(prev => {
+      const current = prev[zoneId] || [];
+      if (current.length === 0) return prev;
+      const nextQueue = current.slice(1).map((m, idx) =>
+        idx === 0 ? { ...m, status: 'your_turn' } : m
+      );
+      return { ...prev, [zoneId]: nextQueue };
+    });
+
     try {
       const res = await fetch(`${API_URL}/queue/next`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zone_id: zoneId }),
       });
-
       if (!res.ok) throw new Error('Failed to advance queue');
-
       const data = await res.json();
-      toast.success(
-        data.next_position
-          ? `Advanced queue — Next: #${data.next_position}`
-          : 'Queue is now empty',
-      );
+      toast.success(data.next_position ? `Advanced — Next #${data.next_position}` : 'Queue empty');
+
+      const now = new Date();
+      const ts = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setCommsLog(prev => [{ time: ts, sender: 'SYS_ADMIN', type: 'system', msg: `QUEUE ADVANCED FOR ZONE. EMAIL NOTIFICATION DISPATCHED.` }, ...prev].slice(0, 20));
     } catch (err) {
+      setQueueData(prev => ({ ...prev, [zoneId]: previousQueue }));
       toast.error('Failed to advance queue');
     }
-  }, []);
+  }, [queueData]);
 
-  // Pause/resume queue
+  // Pause/resume (Optimistic UI)
   const handleTogglePause = useCallback(async (zoneId, currentlyPaused) => {
+    setZones(prev => prev.map(z =>
+      z.id === zoneId ? { ...z, queue_paused: !currentlyPaused } : z
+    ));
     try {
       const res = await fetch(`${API_URL}/queue/pause`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zone_id: zoneId, paused: !currentlyPaused }),
       });
-
       if (!res.ok) throw new Error('Failed');
-
       toast.success(!currentlyPaused ? 'Queue paused' : 'Queue resumed');
     } catch (err) {
+      setZones(prev => prev.map(z =>
+        z.id === zoneId ? { ...z, queue_paused: currentlyPaused } : z
+      ));
       toast.error('Failed to update queue');
     }
   }, []);
 
-  // Manual remove member
+  // Remove member
   const handleRemoveMember = useCallback(async (zoneId, memberId) => {
-    if (!window.confirm('Are you sure you want to remove this person from the queue?')) return;
-    
+    if (!window.confirm('Remove this person from the queue?')) return;
     try {
-      const res = await fetch(`${API_URL}/queue/members/${zoneId}/${memberId}`, {
-        method: 'DELETE',
-      });
-
-      if (!res.ok) throw new Error('Failed to remove');
-
+      const res = await fetch(`${API_URL}/queue/members/${zoneId}/${memberId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
       toast.success('Member removed');
     } catch (err) {
       toast.error('Failed to remove member');
     }
   }, []);
 
-  // Send announcement
+  // Send announcement (via Comms)
   const handleSendAnnouncement = async (e) => {
     e.preventDefault();
-    if (!announcementMsg.trim()) {
-      toast.error('Please enter a message');
-      return;
-    }
-
+    if (!announcementMsg.trim()) return;
     setSending(true);
     try {
       const res = await fetch(`${API_URL}/announcements/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: announcementMsg.trim(),
-          target_zone: announcementTarget,
-        }),
+        body: JSON.stringify({ message: announcementMsg.trim(), target_zone: 'all' }),
       });
-
-      if (!res.ok) throw new Error('Failed to send');
-
-      toast.success('📢 Announcement sent!');
+      if (!res.ok) throw new Error('Failed');
+      const now = new Date();
+      const ts = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setCommsLog(prev => [{ time: ts, sender: 'OPERATOR', type: 'operator', msg: announcementMsg.trim().toUpperCase() }, ...prev].slice(0, 20));
       setAnnouncementMsg('');
+      toast.success('Broadcast sent', { icon: <Mic size={14} /> });
     } catch (err) {
-      toast.error('Failed to send announcement');
+      toast.error('Failed to send');
     } finally {
       setSending(false);
     }
   };
 
+  // Derived data
+  const filteredZones = useMemo(() =>
+    selectedVenueId ? zones.filter(z => z.venue_id === selectedVenueId) : []
+  , [zones, selectedVenueId]);
+
+  const totalQueueMembers = useMemo(() =>
+    Object.values(queueData).reduce((sum, m) => sum + m.length, 0)
+  , [queueData]);
+
+  const avgCrowdScore = useMemo(() =>
+    filteredZones.length > 0
+      ? (filteredZones.reduce((s, z) => s + (z.crowd_score || 0), 0) / filteredZones.length).toFixed(1)
+      : 0
+  , [filteredZones]);
+
+  const highCrowdZones = useMemo(() =>
+    filteredZones.filter(z => (z.crowd_score || 0) > 6)
+  , [filteredZones]);
+
+  const selectedVenueName = venues.find(v => v.id === selectedVenueId)?.name || 'ALL SECTORS';
+
+  const alertLevel = highCrowdZones.length === 0 ? 'LOW' : highCrowdZones.length <= 2 ? 'MODERATE' : 'HIGH';
+  const alertDesc = highCrowdZones.length > 0
+    ? `${highCrowdZones[0]?.name?.toUpperCase()} BOTTLENECK DETECTED. MONITORING.`
+    : 'ALL ZONES NOMINAL. NO CONGESTION DETECTED.';
+
   // ===== LOGIN SCREEN =====
   if (!authenticated) {
     return (
       <div className="staff-login">
-        <form className="staff-login-card" onSubmit={handleLogin}>
-          <div className="staff-login-icon">🛡️</div>
-          <h2>Staff Access</h2>
-          <p>Enter the staff password to access the command center</p>
-
-          {loginError && (
-            <div className="staff-login-error">{loginError}</div>
-          )}
-
+        <form className="staff-login-card" onSubmit={handleLogin} style={{ background: 'var(--ops-surface)', borderColor: 'var(--ops-border)' }}>
+          <div className="staff-login-icon" style={{ background: 'var(--ops-cyan-dim)' }}><ShieldAlert size={28} color="var(--ops-cyan)" /></div>
+          <h2 style={{ fontFamily: 'var(--ops-mono)', color: 'var(--ops-cyan)', letterSpacing: '3px' }}>STAFF ACCESS</h2>
+          <p style={{ fontFamily: 'var(--ops-mono)', fontSize: '11px', color: 'var(--ops-text-dim)' }}>ENTER CREDENTIALS TO ACCESS COMMAND CENTER</p>
+          {loginError && <div className="staff-login-error">{loginError}</div>}
           <div className="form-group">
             <input
               type="password"
@@ -202,315 +240,441 @@ export default function StaffDashboard() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoFocus
+              style={{ background: 'var(--ops-surface-2)', borderColor: 'var(--ops-border)', fontFamily: 'var(--ops-mono)' }}
             />
           </div>
-
-          <button type="submit" className="btn btn-primary">
-            Unlock Dashboard
+          <button type="submit" style={{ width: '100%', padding: '12px', background: 'var(--ops-cyan-dim)', border: '1px solid var(--ops-border-bright)', borderRadius: '6px', color: 'var(--ops-cyan)', fontFamily: 'var(--ops-mono)', fontSize: '12px', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
+            UNLOCK DASHBOARD
           </button>
         </form>
       </div>
     );
   }
 
-  // ===== LOADING =====
   if (loading) {
     return (
-      <div className="loading-spinner">
-        <div className="spinner"></div>
+      <div className="loading-spinner" style={{ background: 'var(--ops-bg)' }}>
+        <div className="spinner" style={{ borderTopColor: 'var(--ops-cyan)' }}></div>
       </div>
     );
   }
 
-  // ===== STATS (Filtered by Venue) =====
-  const filteredZones = selectedVenueId 
-    ? zones.filter(z => z.venue_id === selectedVenueId)
-    : zones;
-
-  const totalQueueMembers = Object.values(queueData).reduce((sum, members) => sum + members.length, 0);
-  const avgCrowdScore = filteredZones.length > 0
-    ? (filteredZones.reduce((sum, z) => sum + z.crowd_score, 0) / filteredZones.length).toFixed(1)
-    : 0;
-  const highCrowdZones = filteredZones.filter(z => z.crowd_score > 6).length;
+  // Queue zones with members for the right panel
+  const queueZones = filteredZones.filter(z => {
+    const members = queueData[z.id] || [];
+    return members.length > 0 || z.queue_paused;
+  });
+  // Also show zones even without members so staff can see the full picture
+  const allQueueZones = filteredZones;
 
   return (
-    <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <h1 className="page-title">🛡️ Command Center</h1>
-          <p className="page-subtitle">Real-time venue operations dashboard</p>
-        </div>
-        <button
-          className="btn"
-          style={{
-            width: 'auto',
-            padding: '8px 20px',
-            fontSize: '13px',
-            background: 'rgba(255, 23, 68, 0.15)',
-            color: '#ff1744',
-            border: '1px solid rgba(255, 23, 68, 0.3)',
-          }}
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
-      </div>
+    <div className="ops-shell">
+      {/* Subtle scanline overlay */}
+      <div className="ops-scanline" />
 
-      <div className="staff-dashboard">
-        {/* Overview Stats */}
-        <div className="dashboard-stats">
-          <div className="stat-card">
-            <div className="stat-value">{zones.length}</div>
-            <div className="stat-label">Total Zones</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value" style={{
-              background: avgCrowdScore <= 3 ? 'linear-gradient(135deg, #00e676, #69f0ae)' :
-                          avgCrowdScore <= 6 ? 'linear-gradient(135deg, #ffc107, #ffab00)' :
-                          'linear-gradient(135deg, #ff1744, #ff5252)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}>
-              {avgCrowdScore}
-            </div>
-            <div className="stat-label">Avg Crowd Score</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value" style={{
-              background: 'linear-gradient(135deg, #ff1744, #ff5252)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}>
-              {highCrowdZones}
-            </div>
-            <div className="stat-label">High Crowd Zones</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{totalQueueMembers}</div>
-            <div className="stat-label">People in Queues</div>
-          </div>
+      <div className="ops-layout">
+        {/* ===== SIDEBAR (Icon Rail) ===== */}
+        <div className="ops-sidebar">
+          <div className="ops-sidebar-icon active" title="HUD"><LayoutDashboard size={18} /></div>
+          <div className="ops-sidebar-icon" title="Map"><Map size={18} /></div>
+          <div className="ops-sidebar-icon" title="Staff"><Users size={18} /></div>
+          <div className="ops-sidebar-icon" title="Alerts"><Bell size={18} /></div>
+          <div className="ops-sidebar-icon" title="Settings" style={{ marginTop: 'auto' }}><Settings size={18} /></div>
+          <div className="ops-sidebar-icon" title="Logout" onClick={handleLogout} style={{ color: 'var(--ops-magenta)' }}><Power size={18} /></div>
         </div>
 
-        {/* Announcement Panel */}
-        <div className="announcement-panel">
-          <h3>
-            <span>📢</span> Send Announcement
-          </h3>
-          <form className="announcement-form" onSubmit={handleSendAnnouncement}>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Type your announcement message..."
-              value={announcementMsg}
-              onChange={(e) => setAnnouncementMsg(e.target.value)}
-            />
-            <select
-              className="form-select"
-              value={announcementTarget}
-              onChange={(e) => setAnnouncementTarget(e.target.value)}
-            >
-              <option value="all">🌐 All Zones</option>
-              {zones.map(zone => (
-                <option key={zone.id} value={zone.id}>{zone.name}</option>
-              ))}
-            </select>
+        {/* ===== LEFT COLUMN (HUD) ===== */}
+        <div className="ops-left">
+          {/* Brand */}
+          <div className="ops-brand">
+            <div className="ops-brand-title">VENUEIQ</div>
+            <div className="ops-brand-sub">OPERATOR 042</div>
+          </div>
+
+          {/* Total Occupancy */}
+          <div className="ops-metric">
+            <div className="ops-metric-header">
+              <span className="ops-metric-label">Total Occupancy</span>
+              <span className="ops-metric-tag id">ID-STAT</span>
+            </div>
+            <div className="ops-metric-value">
+              {totalQueueMembers.toLocaleString()}<span> /{filteredZones.length * 100}</span>
+            </div>
+            <div className="ops-metric-bar">
+              <div className="ops-metric-bar-fill" style={{ width: `${Math.min(100, (totalQueueMembers / Math.max(1, filteredZones.length * 100)) * 100)}%` }} />
+            </div>
+          </div>
+
+          {/* Alert Level */}
+          <div className="ops-alert">
+            <div className="ops-metric-header">
+              <span className="ops-metric-label">Alert Level</span>
+              <span className="ops-metric-tag alert">ID-ALERT</span>
+            </div>
+            <div className="ops-alert-level">
+              {alertLevel}
+              <div className="bars">
+                <span style={{ height: '8px' }} />
+                <span style={{ height: '14px' }} />
+                <span style={{ height: alertLevel === 'LOW' ? '6px' : '20px', opacity: alertLevel === 'LOW' ? 0.3 : 1 }} />
+              </div>
+            </div>
+            <div className="ops-alert-desc">{alertDesc}</div>
+          </div>
+
+          {/* Zone Mini Cards */}
+          {filteredZones.slice(0, 4).map(zone => {
+            const level = getLevel(zone.crowd_score || 0);
+            const members = queueData[zone.id] || [];
+            return (
+              <div key={zone.id} className="ops-zone-mini" onClick={() => setDrillZoneId(zone.id)}>
+                <div className="ops-zone-mini-header">
+                  <span className="ops-zone-mini-name">{zone.name}</span>
+                  <span className={`ops-status-chip ${level}`}>{getLevelLabel(zone.crowd_score || 0)}</span>
+                </div>
+                <div className="ops-zone-mini-bar">
+                  <div className={`ops-zone-mini-bar-fill ${level === 'nominal' ? 'low' : level === 'dense' ? 'high' : 'moderate'}`} style={{ width: `${(zone.crowd_score || 0) * 10}%` }} />
+                </div>
+                <div className="ops-zone-mini-stats">
+                  <span className="ops-zone-mini-stat">DENSITY: <strong>{zone.crowd_score}/10</strong></span>
+                  <span className="ops-zone-mini-stat">QUEUE: <strong>{members.length}</strong></span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Deploy Button */}
+          <button className="ops-deploy-btn">
+            <Zap size={14} /> DEPLOY ASSET
+          </button>
+        </div>
+
+        {/* ===== CENTER COLUMN (Map + Comms) ===== */}
+        <div className="ops-center">
+          {/* Map Header */}
+          <div className="ops-map-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span className="ops-map-tag">LIVE_FEED // SAT_LINK_04</span>
+              <span style={{ fontFamily: 'var(--ops-mono)', fontSize: '10px', color: 'var(--ops-text-dim)', letterSpacing: '1px' }}>
+                ACTIVE ZONES: {filteredZones.length}
+              </span>
+            </div>
             <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={sending}
+              onClick={() => setShowLiveMap(!showLiveMap)}
+              className="ops-action-btn cyan"
+              style={{ width: 'auto', padding: '6px 12px' }}
             >
-              {sending ? 'Sending...' : '📢 Send'}
+              {showLiveMap ? 'SEE HEATMAP' : 'SEE ON MAP'}
             </button>
-          </form>
+          </div>
+
+          {/* Map Area */}
+          <div className="ops-map-container" style={{ background: '#0a0e17' }}>
+            {!showLiveMap ? (
+              // Heatmap View
+              <div style={{ position: 'relative', width: '100%', height: '100%', background: `url(${getVenueImage(selectedVenueId)}) center center / cover no-repeat` }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(6, 10, 19, 0.4)', zIndex: 0 }} />
+                <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
+                  {filteredZones.map((zone, idx) => {
+                    const positions = [
+                      { top: '35%', left: '40%' },
+                      { top: '55%', left: '25%' },
+                      { top: '45%', left: '65%' },
+                      { top: '65%', left: '55%' },
+                      { top: '25%', left: '50%' },
+                      { top: '75%', left: '40%' }
+                    ];
+                    const pos = positions[idx % positions.length];
+                    const level = getLevel(zone.crowd_score || 0);
+                    const color = level === 'dense' ? 'var(--ops-magenta)' : level === 'moderate' ? 'var(--ops-amber)' : 'var(--ops-green)';
+                    const bg = level === 'dense' ? 'rgba(255, 45, 120, 0.3)' : level === 'moderate' ? 'rgba(255, 171, 0, 0.3)' : 'rgba(0, 230, 118, 0.2)';
+                    
+                    return (
+                      <div key={zone.id} style={{
+                        position: 'absolute',
+                        top: pos.top,
+                        left: pos.left,
+                        background: bg,
+                        border: `1px solid ${color}`,
+                        padding: '6px 10px',
+                        boxShadow: `0 0 20px ${color}`,
+                        backdropFilter: 'blur(4px)',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontFamily: 'var(--ops-mono)', fontSize: '9px', color: 'white', fontWeight: 700, textTransform: 'uppercase' }}>{zone.name}</div>
+                        <div style={{ fontFamily: 'var(--ops-mono)', fontSize: '8px', color: color, marginTop: '2px' }}>DENS: {zone.crowd_score}/10</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              // Live Map View
+              <>
+                <div style={{ position: 'absolute', inset: 0, background: 'url(/stadium-bg.png) center center / cover no-repeat', opacity: 0.5, zIndex: 0 }} />
+                <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
+                  <VenueMap
+                    zones={filteredZones}
+                    onReport={() => {}}
+                    wayfindingFrom=""
+                    wayfindingTo=""
+                  />
+                </div>
+              </>
+            )}
+            {/* Legend Overlay */}
+            <div className="ops-map-overlay">
+              <div className="ops-map-legend-title">MAP LEGEND</div>
+              <div className="ops-map-legend-item">
+                <div className="ops-map-legend-dot" style={{ background: 'var(--ops-magenta)' }} />
+                CRITICAL CONGESTION
+              </div>
+              <div className="ops-map-legend-item">
+                <div className="ops-map-legend-dot" style={{ background: 'var(--ops-green)' }} />
+                NOMINAL FLOW
+              </div>
+            </div>
+          </div>
+
+          {/* Comms Log */}
+          <div className="ops-comms">
+            <div className="ops-comms-header">
+              <span className="ops-comms-title">
+                <span className="dot" /> COMMS LOG // LOCAL CHANNEL
+              </span>
+              <span style={{ fontFamily: 'var(--ops-mono)', fontSize: '9px', color: 'var(--ops-text-dim)', letterSpacing: '1px' }}>AUTO-ARCHIVING ACTIVE</span>
+            </div>
+
+            {commsLog.map((entry, i) => (
+              <div key={i} className="ops-comms-log-entry">
+                <span className="timestamp">[{entry.time}]</span>
+                <span className={`sender ${entry.type}`}>{entry.sender}:</span>
+                {entry.msg}
+              </div>
+            ))}
+
+            <form className="ops-comms-input" onSubmit={handleSendAnnouncement}>
+              <span style={{ color: 'var(--ops-text-dim)', fontFamily: 'var(--ops-mono)', fontSize: '11px' }}>⟫⟫</span>
+              <input
+                placeholder="TRANSMIT TO FIELD STAFF..."
+                value={announcementMsg}
+                onChange={(e) => setAnnouncementMsg(e.target.value)}
+              />
+              <button type="submit" disabled={sending}>
+                {sending ? '...' : 'SEND'}
+              </button>
+            </form>
+          </div>
         </div>
 
-        {/* TIER 1: Venue Selection */}
-        <div className="wayfinding-section" style={{ marginBottom: '24px', background: 'var(--bg-card)' }}>
-          <div className="section-title">
-            <span className="section-title-icon">🇮🇳</span>
-            {selectedVenueId ? 'Active Venue' : 'Select Venue to Start'}
+        {/* ===== RIGHT COLUMN (Queue Management) ===== */}
+        <div className="ops-right">
+          <div className="ops-right-header">
+            <div className="ops-right-title">QUEUE MANAGEMENT</div>
+            <div className="ops-right-sub">LIVE TELEMETRY FEED // {selectedVenueName.toUpperCase()}</div>
           </div>
-          <p style={{ padding: '0 24px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-            Choose a venue to monitor its live zones and crowd metrics
-          </p>
-          <div style={{ padding: '0 24px 20px' }}>
+
+          {/* Venue Filter */}
+          <div className="ops-venue-filter">
             <select
-              className="form-select"
-              style={{ maxWidth: '400px', border: '1px solid var(--accent-blue)' }}
               value={selectedVenueId}
-              onChange={(e) => {
-                setSelectedVenueId(e.target.value);
-                setFocusedZoneId(''); // Reset focus when switching venues
-              }}
+              onChange={(e) => setSelectedVenueId(e.target.value)}
             >
-              <option value="">Select a venue...</option>
+              <option value="">ALL SECTORS</option>
               {venues.map(v => (
                 <option key={v.id} value={v.id}>{v.name} ({v.city})</option>
               ))}
             </select>
           </div>
-        </div>
 
-        {selectedVenueId && (
-          <>
-            {/* TIER 2: Zone Monitoring Dashboard */}
-            <div className="announcement-panel" style={{ marginBottom: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0 }}>
-                  <span>📢</span> Venue Announcement
-                </h3>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Broadcasting to {focusedZoneId ? 'Focused Zone' : 'All Local Zones'}</span>
-              </div>
-              <form className="announcement-form" onSubmit={handleSendAnnouncement}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Type message for local attendees..."
-                  value={announcementMsg}
-                  onChange={(e) => setAnnouncementMsg(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={sending}
-                >
-                  {sending ? 'Sending...' : '📢 Send'}
-                </button>
-              </form>
-            </div>
+          {/* Queue Cards */}
+          <div className="ops-queue-list">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {allQueueZones.map(zone => {
+                const members = queueData[zone.id] || [];
+                const isPaused = zone.queue_paused || false;
+                const level = getLevel(zone.crowd_score || 0);
+                const waitTime = members.length > 0 ? members.length * 3 : 0;
 
-            {/* Dynamic View: Local Overview vs Focused Zone */}
-            {!focusedZoneId ? (
-              <div className="local-overview fade-in">
-                <div className="section-title" style={{ marginBottom: '16px' }}>
-                  <span className="section-title-icon">📊</span>
-                  {venues.find(v => v.id === selectedVenueId)?.name} — Zone Status
-                </div>
-                <div className="zones-grid" style={{ marginBottom: '32px' }}>
-                  {filteredZones.map(zone => (
-                    <div 
-                      key={zone.id} 
-                      onClick={() => setFocusedZoneId(zone.id)}
-                      style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
-                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                      <ZoneCard
-                        zone={zone}
-                        queueCount={(queueData[zone.id] || []).length}
-                      />
-                      <div style={{ textAlign: 'center', marginTop: '-8px', fontSize: '10px', color: 'var(--accent-blue)', fontWeight: 600 }}>Click to Manage Queue ➔</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="focused-zone-dashboard fade-in">
-                <div style={{ marginBottom: '16px' }}>
-                   <button 
-                    onClick={() => setFocusedZoneId('')}
-                    style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', fontSize: '13px', cursor: 'pointer', padding: 0 }}
+                return (
+                  <motion.div
+                    key={zone.id}
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="ops-queue-card"
+                    onClick={() => members.length > 0 && setDrillZoneId(zone.id)}
                   >
-                    ← Back to {venues.find(v => v.id === selectedVenueId)?.name} Overview
-                  </button>
-                </div>
-                
-                {filteredZones.filter(z => z.id === focusedZoneId).map(zone => {
-                  const members = queueData[zone.id] || [];
-                  const isPaused = zone.queue_paused || false;
-
-                  return (
-                    <div key={zone.id}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                        <div>
-                          <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{zone.name}</h2>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Dedicated Management Dashboard</span>
-                            {isPaused && (
-                              <span style={{ padding: '2px 8px', background: 'rgba(255, 193, 7, 0.15)', color: '#ffc107', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>PAUSED</span>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                           <button
-                            className="btn btn-primary"
-                            style={{ width: 'auto' }}
-                            onClick={() => handleAdvanceQueue(zone.id)}
-                            disabled={members.length === 0}
-                          >
-                            ⏩ Next Person
-                          </button>
-                          <button
-                            className={`btn ${isPaused ? 'btn-success' : 'btn-danger'}`}
-                            style={{ 
-                              width: 'auto', 
-                              background: isPaused ? 'rgba(0, 230, 118, 0.15)' : 'rgba(255, 23, 68, 0.15)',
-                              color: isPaused ? '#00e676' : '#ff1744',
-                              border: `1px solid ${isPaused ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 23, 68, 0.3)'}`
-                            }}
-                            onClick={() => handleTogglePause(zone.id, isPaused)}
-                          >
-                            {isPaused ? '▶️ Resume' : '⏸️ Pause'}
-                          </button>
-                        </div>
+                    <div className="ops-queue-card-header">
+                      <div>
+                        <div className="ops-queue-card-name">{zone.name}</div>
+                        {isPaused && <span className="ops-status-chip dense" style={{ marginTop: '4px', display: 'inline-block' }}>PAUSED</span>}
                       </div>
+                      <span className={`ops-status-chip ${level}`}>{members.length > 0 ? 'OPERATIONAL' : 'IDLE'}</span>
+                    </div>
 
-                      <div className="queue-management premium-list">
-                        <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontWeight: 600, fontSize: '14px' }}>Live Attendee List ({members.length})</span>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total queue size for this area</span>
-                        </div>
-                        
-                        {members.length === 0 ? (
-                          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌟</div>
-                            <h3>Queue is clear!</h3>
-                            <p>Good job! No active attendees waiting in this zone.</p>
-                          </div>
-                        ) : (
-                          <ul className="queue-member-list">
-                            {members.map((member, idx) => (
-                              <li key={member.id} className="queue-member-item" style={{ padding: '16px 24px' }}>
-                                <div className="queue-member-info">
-                                  <div className={`queue-member-position ${member.status === 'your_turn' ? 'your-turn' : ''}`}>
-                                    {idx + 1}
-                                  </div>
-                                  <div>
-                                    <div className="queue-member-name" style={{ fontSize: '15px', fontWeight: 600 }}>{member.name}</div>
-                                    <div className="queue-member-phone" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{member.phone} • Unique ID: <strong>{member.id}</strong></div>
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                  <span className={`queue-member-status ${member.status === 'your_turn' ? 'your-turn' : 'waiting'}`}>
-                                    {member.status === 'your_turn' ? '🟢 Servicing' : '⏳ In Line'}
-                                  </span>
-                                  <button 
-                                    className="btn"
-                                    style={{ 
-                                      width: 'auto', 
-                                      padding: '6px 12px', 
-                                      fontSize: '11px',
-                                      background: 'rgba(255, 255, 255, 0.05)',
-                                      border: '1px solid var(--border-color)'
-                                    }}
-                                    onClick={() => handleRemoveMember(zone.id, member.id)}
-                                  >
-                                    Clear
-                                  </button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                    <div className="ops-queue-card-stats">
+                      <div className="ops-queue-stat">
+                        <div className="ops-queue-stat-val" style={{ color: 'var(--ops-cyan)' }}>{String(waitTime).padStart(2, '0')}<span style={{ fontSize: '10px', color: 'var(--ops-text-dim)' }}> MIN</span></div>
+                        <div className="ops-queue-stat-label">WAIT TIME</div>
+                      </div>
+                      <div className="ops-queue-stat">
+                        <div className="ops-queue-stat-val">{members.length}</div>
+                        <div className="ops-queue-stat-label">IN QUEUE</div>
+                      </div>
+                      <div className="ops-queue-stat">
+                        <div className="ops-queue-stat-val" style={{ color: 'var(--ops-green)' }}>{zone.crowd_score || 0}<span style={{ fontSize: '10px', color: 'var(--ops-text-dim)' }}>/10</span></div>
+                        <div className="ops-queue-stat-label">DENSITY</div>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="ops-queue-card-actions" onClick={(e) => e.stopPropagation()}>
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        className="ops-action-btn cyan"
+                        disabled={members.length === 0}
+                        onClick={() => handleAdvanceQueue(zone.id)}
+                      >
+                        CALL NEXT (EMAIL)
+                      </motion.button>
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        className={`ops-action-btn ${isPaused ? 'cyan' : 'magenta'}`}
+                        onClick={() => handleTogglePause(zone.id, isPaused)}
+                      >
+                        {isPaused ? 'RESUME' : 'PAUSE'}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+
+            {allQueueZones.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--ops-text-dim)', fontFamily: 'var(--ops-mono)', fontSize: '12px' }}>
+                SELECT A VENUE TO VIEW QUEUE DATA
               </div>
             )}
-          </>
-        )}
+          </div>
+
+          {/* Global Queue Stats */}
+          <div className="ops-global-stats">
+            <div className="ops-global-stats-grid">
+              <div>
+                <div className="ops-global-stat-val">{totalQueueMembers.toLocaleString()}<span className="unit"> USR</span></div>
+                <div className="ops-global-stat-label">TOTAL USERS IN QUEUE</div>
+              </div>
+              <div>
+                <div className="ops-global-stat-val">{(totalQueueMembers * 3 / Math.max(1, filteredZones.length)).toFixed(1)}<span className="unit"> MIN</span></div>
+                <div className="ops-global-stat-label">AVG STADIUM DELAY</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Staff Actions */}
+          <div className="ops-staff-actions">
+            <button className="ops-action-btn cyan" style={{ flex: 1 }}>DEPLOY RELIEF STAFF</button>
+            <button className="ops-action-btn magenta" style={{ flex: 1 }}>PAUSE ALL ZONES</button>
+          </div>
+
+          {/* System Status */}
+          <div className="ops-system-status">
+            <span className="ops-system-status-text"><span className="dot" /> SYSTEM STATUS: NOMINAL</span>
+            <span style={{ fontFamily: 'var(--ops-mono)', fontSize: '9px', color: 'var(--ops-text-dim)' }}>v2.1.0</span>
+          </div>
+        </div>
       </div>
+
+      {/* ===== MEMBER DRILL-DOWN MODAL ===== */}
+      <AnimatePresence>
+        {drillZoneId && (
+          <motion.div
+            className="ops-member-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setDrillZoneId(null)}
+          >
+            <motion.div
+              className="ops-member-modal"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="ops-member-modal-header">
+                <span className="ops-member-modal-title">
+                  {zones.find(z => z.id === drillZoneId)?.name?.toUpperCase()} — LIVE QUEUE
+                </span>
+                <button className="ops-member-modal-close" onClick={() => setDrillZoneId(null)}>✕</button>
+              </div>
+
+              <table className="ops-member-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(queueData[drillZoneId] || []).map((member) => (
+                    <tr key={member.id}>
+                      <td style={{ color: 'var(--ops-cyan)' }}>
+                        {member.id}
+                      </td>
+                      <td>{member.name}</td>
+                      <td style={{ color: 'var(--ops-text-dim)' }}>
+                        {member.email
+                          ? member.email.slice(0, 3) + '***@' + member.email.split('@')[1]
+                          : '—'}
+                      </td>
+                      <td>
+                        <span className={`ops-status-chip ${member.status === 'your_turn' ? 'nominal' : 'moderate'}`}>
+                          {member.status === 'your_turn' ? 'SERVICING' : 'WAITING'}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="ops-action-btn magenta"
+                          style={{ padding: '4px 8px', flex: 'none' }}
+                          onClick={() => handleRemoveMember(drillZoneId, member.id)}
+                        >
+                          REMOVE
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(queueData[drillZoneId] || []).length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--ops-text-dim)', padding: '30px' }}>
+                        NO ACTIVE USERS IN THIS QUEUE
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              <div style={{ padding: '12px 16px', display: 'flex', gap: '8px', borderTop: '1px solid var(--ops-border)' }}>
+                <button
+                  className="ops-action-btn cyan"
+                  style={{ flex: 1 }}
+                  onClick={() => { handleAdvanceQueue(drillZoneId); }}
+                  disabled={(queueData[drillZoneId] || []).length === 0}
+                >
+                  CALL NEXT USER (SEND EMAIL)
+                </button>
+                <button className="ops-action-btn magenta" style={{ flex: 'none', padding: '8px 16px' }} onClick={() => setDrillZoneId(null)}>
+                  CLOSE
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

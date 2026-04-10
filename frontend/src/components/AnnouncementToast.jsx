@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { Megaphone, X } from 'lucide-react';
 
 export default function AnnouncementToast() {
   const [announcement, setAnnouncement] = useState(null);
@@ -70,12 +71,14 @@ export default function AnnouncementToast() {
     <div className="announcement-toast">
       <div className="announcement-toast-inner">
         <div className="announcement-toast-header">
-          <span className="announcement-toast-label">📢 Announcement</span>
+          <span className="announcement-toast-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Megaphone size={14} /> Announcement
+          </span>
           <button
             className="announcement-toast-close"
             onClick={() => setVisible(false)}
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
         <div className="announcement-toast-message">

@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 from firebase_admin_setup import db
 from google.cloud.firestore_v1 import SERVER_TIMESTAMP
 import uuid
+from email_utils import send_turn_email
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -13,6 +15,7 @@ class QueueJoinRequest(BaseModel):
     zone_id: str
     name: str
     phone: str
+    email: Optional[EmailStr] = None
 
 
 class QueueNextRequest(BaseModel):
@@ -55,6 +58,7 @@ async def join_queue(request: QueueJoinRequest):
         member_data = {
             "name": request.name,
             "phone": request.phone,
+            "email": request.email,
             "position": next_position,
             "joined_at": SERVER_TIMESTAMP,
             "status": "your_turn" if next_position == 1 else "waiting"
@@ -83,7 +87,7 @@ async def join_queue(request: QueueJoinRequest):
 
 
 @router.post("/next")
-async def advance_queue(request: QueueNextRequest):
+async def advance_queue(request: QueueNextRequest, background_tasks: BackgroundTasks):
     """Advance the queue: mark current #1 as done, promote next person."""
     try:
         members_ref = db.collection("queues").document(request.zone_id).collection("members")
@@ -112,8 +116,23 @@ async def advance_queue(request: QueueNextRequest):
         next_position = None
         if waiting:
             next_doc = waiting[0]
+            next_data = next_doc.to_dict()
             members_ref.document(next_doc.id).update({"status": "your_turn"})
-            next_position = next_doc.to_dict().get("position")
+            next_position = next_data.get("position")
+            
+            # Send email notification if email exists
+            recipient_email = next_data.get("email")
+            if recipient_email:
+                try:
+                    background_tasks.add_task(
+                        send_turn_email,
+                        recipient_email,
+                        next_data.get("name"),
+                        next_doc.id
+                    )
+                except Exception as email_err:
+                    # Log error silently or to a logging service
+                    pass
         
         return {
             "advanced_member_id": advanced_member_id,
