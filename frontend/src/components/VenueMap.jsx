@@ -117,9 +117,19 @@ function findLeastCrowdedPath(zones, fromId, toId) {
 }
 
 // Component to fit map bounds dynamically
-function MapBoundsUpdater({ zones }) {
+function MapBoundsUpdater({ zones, forceCenterId }) {
   const map = useMap();
   useEffect(() => {
+    // 1. If a specific zone is targeted (e.g. via search), center it
+    if (forceCenterId) {
+      const zone = zones.find(z => z.id === forceCenterId);
+      if (zone && zone.coordinates) {
+        map.flyTo(zone.coordinates, 18, { duration: 1.5 });
+        return;
+      }
+    }
+
+    // 2. Otherwise, fit all zones in view
     if (zones.length > 0) {
       const bounds = zones
         .map(z => z.coordinates)
@@ -129,7 +139,7 @@ function MapBoundsUpdater({ zones }) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
       }
     }
-  }, [zones, map]);
+  }, [zones, map, forceCenterId]);
   return null;
 }
 
@@ -179,7 +189,7 @@ export default function VenueMap({ zones, onReport, wayfindingFrom, wayfindingTo
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapBoundsUpdater zones={zones} />
+          <MapBoundsUpdater zones={zones} forceCenterId={wayfindingFrom} />
 
           {zones.map(zone => (
             <Marker

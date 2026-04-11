@@ -27,11 +27,7 @@ export default function StaffDashboard() {
   // Announcement / Comms
   const [announcementMsg, setAnnouncementMsg] = useState('');
   const [sending, setSending] = useState(false);
-  const [commsLog, setCommsLog] = useState([
-    { time: '10:42:31', sender: 'STF-09', type: 'staff', msg: 'NORTH GATE 4 OPENED. RELIEVING PRESSURE ON TURNSTILES 1-3.' },
-    { time: '10:42:18', sender: 'SYS_ADMIN', type: 'system', msg: 'AUTOMATED DRONE DEPLOYMENT FOR ZONE 16 COMPLETE. AERIAL FEED LIVE.' },
-    { time: '10:43:08', sender: 'OPERATOR', type: 'operator', msg: 'DISPATCHING MEDICAL TEAM TO SECTION 201. MINOR DISTRESS REPORTED.' },
-  ]);
+  const [commsLog, setCommsLog] = useState([]);
 
   // Drill-down modal
   const [drillZoneId, setDrillZoneId] = useState(null);
@@ -273,14 +269,9 @@ export default function StaffDashboard() {
       <div className="ops-scanline" />
 
       <div className="ops-layout">
-        {/* ===== SIDEBAR (Icon Rail) ===== */}
         <div className="ops-sidebar">
           <div className="ops-sidebar-icon active" title="HUD"><LayoutDashboard size={18} /></div>
-          <div className="ops-sidebar-icon" title="Map"><Map size={18} /></div>
-          <div className="ops-sidebar-icon" title="Staff"><Users size={18} /></div>
-          <div className="ops-sidebar-icon" title="Alerts"><Bell size={18} /></div>
-          <div className="ops-sidebar-icon" title="Settings" style={{ marginTop: 'auto' }}><Settings size={18} /></div>
-          <div className="ops-sidebar-icon" title="Logout" onClick={handleLogout} style={{ color: 'var(--ops-magenta)' }}><Power size={18} /></div>
+          <div className="ops-sidebar-icon" title="Logout" onClick={handleLogout} style={{ color: 'var(--ops-magenta)', marginTop: 'auto' }}><Power size={18} /></div>
         </div>
 
         {/* ===== LEFT COLUMN (HUD) ===== */}
@@ -343,10 +334,7 @@ export default function StaffDashboard() {
             );
           })}
 
-          {/* Deploy Button */}
-          <button className="ops-deploy-btn">
-            <Zap size={14} /> DEPLOY ASSET
-          </button>
+
         </div>
 
         {/* ===== CENTER COLUMN (Map + Comms) ===== */}
@@ -572,11 +560,7 @@ export default function StaffDashboard() {
             </div>
           </div>
 
-          {/* Staff Actions */}
-          <div className="ops-staff-actions">
-            <button className="ops-action-btn cyan" style={{ flex: 1 }}>DEPLOY RELIEF STAFF</button>
-            <button className="ops-action-btn magenta" style={{ flex: 1 }}>PAUSE ALL ZONES</button>
-          </div>
+
 
           {/* System Status */}
           <div className="ops-system-status">

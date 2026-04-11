@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Map, Ticket, Shield } from 'lucide-react';
@@ -7,7 +8,26 @@ import QueuePage from './pages/QueuePage';
 import AnnouncementToast from './components/AnnouncementToast';
 import './index.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function App() {
+  const [systemStatus, setSystemStatus] = useState('FETCHING');
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/health`);
+        if (res.ok) setSystemStatus('STABLE');
+        else setSystemStatus('ERROR');
+      } catch (err) {
+        setSystemStatus('OFFLINE');
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Router>
       <div className="app">
@@ -38,9 +58,24 @@ function App() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontFamily: 'var(--ops-mono)', fontSize: '9px', color: 'var(--ops-text-dim)', letterSpacing: '1px' }}>SYSTEM STATUS:</span>
-            <span style={{ fontFamily: 'var(--ops-mono)', fontSize: '10px', color: 'var(--ops-green)', fontWeight: 700, letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: '6px', height: '6px', background: 'var(--ops-green)', borderRadius: '50%', display: 'inline-block' }} />
-              STABLE
+            <span style={{ 
+              fontFamily: 'var(--ops-mono)', 
+              fontSize: '10px', 
+              color: systemStatus === 'STABLE' ? 'var(--ops-green)' : systemStatus === 'OFFLINE' ? 'var(--ops-magenta)' : 'var(--ops-amber)', 
+              fontWeight: 700, 
+              letterSpacing: '1px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '5px' 
+            }}>
+              <span style={{ 
+                width: '6px', 
+                height: '6px', 
+                background: systemStatus === 'STABLE' ? 'var(--ops-green)' : systemStatus === 'OFFLINE' ? 'var(--ops-magenta)' : 'var(--ops-amber)', 
+                borderRadius: '50%', 
+                display: 'inline-block' 
+              }} />
+              {systemStatus}
             </span>
           </div>
         </nav>

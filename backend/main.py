@@ -53,6 +53,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "https://*.vercel.app",
+        "https://venueiq-frontend-257323972871.us-central1.run.app",
         "*"  # Allow all for development
     ],
     allow_credentials=True,

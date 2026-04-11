@@ -158,11 +158,11 @@ export default function AttendeePage() {
           </select>
           {wayfindingFrom && (
             <button
-              className="btn btn-primary"
-              style={{ width: 'auto', minWidth: '100px' }}
-              onClick={() => { setWayfindingFrom(''); setWayfindingTo(''); }}
+              className="btn btn-secondary"
+              style={{ width: 'auto', minWidth: '100px', background: 'rgba(255, 45, 120, 0.1)', color: 'var(--ops-magenta)', border: '1px solid rgba(255, 45, 120, 0.3)' }}
+              onClick={() => setWayfindingFrom('')}
             >
-              Search
+              RESET VIEW
             </button>
           )}
         </div>
