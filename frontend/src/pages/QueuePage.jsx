@@ -215,6 +215,7 @@ export default function QueuePage() {
                   <label className="form-label">Select Venue</label>
                   <select
                     className="form-select"
+                    aria-label="Select Event Venue"
                     value={selectedVenue}
                     onChange={(e) => {
                       setSelectedVenue(e.target.value);
@@ -234,6 +235,7 @@ export default function QueuePage() {
                     <label className="form-label">Zone / Stall</label>
                     <select
                       className="form-select"
+                      aria-label="Select Zone or Stall"
                       value={selectedZone}
                       onChange={(e) => setSelectedZone(e.target.value)}
                       required
@@ -253,6 +255,7 @@ export default function QueuePage() {
                   <input
                     type="text"
                     className="form-input"
+                    aria-label="Your Name"
                     placeholder="Enter your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -265,6 +268,7 @@ export default function QueuePage() {
                   <input
                     type="tel"
                     className="form-input"
+                    aria-label="Phone Number"
                     placeholder="+91 XXXXX XXXXX"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
@@ -277,6 +281,7 @@ export default function QueuePage() {
                   <input
                     type="email"
                     className="form-input"
+                    aria-label="Email Address (Optional)"
                     placeholder="Receive an email when it's your turn"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -289,6 +294,7 @@ export default function QueuePage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
+                  aria-label="Join the Virtual Queue"
                   disabled={joining}
                 >
                   {joining ? 'Joining...' : (
@@ -300,6 +306,7 @@ export default function QueuePage() {
                   <button 
                     type="button"
                     className="btn-link"
+                    aria-label="Switch to Ticket Tracking form"
                     style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', fontSize: '13px' }}
                     onClick={() => { setIsTracking(true); setName(''); }}
                   >
@@ -319,6 +326,7 @@ export default function QueuePage() {
                   <input
                     type="text"
                     className="form-input"
+                    aria-label="Your Name"
                     placeholder="Enter the name used to join"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -331,6 +339,7 @@ export default function QueuePage() {
                   <input
                     type="text"
                     className="form-input"
+                    aria-label="Ticket ID"
                     placeholder="e.g. a7b2c5d1"
                     value={trackId}
                     onChange={(e) => setTrackId(e.target.value)}
@@ -341,6 +350,7 @@ export default function QueuePage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
+                  aria-label="Restore Pass"
                   disabled={joining}
                 >
                   {joining ? 'Searching...' : (
@@ -352,6 +362,7 @@ export default function QueuePage() {
                   <button 
                     type="button"
                     className="btn-link"
+                    aria-label="Switch to Join Queue form"
                     style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', fontSize: '13px' }}
                     onClick={() => { setIsTracking(false); setName(''); }}
                   >
@@ -370,7 +381,7 @@ export default function QueuePage() {
               <p style={{ color: '#9aa0a6', fontSize: '13px', marginBottom: '16px' }}>
                 Share this QR code at stalls and entry points
               </p>
-              <div className="qr-code-wrapper">
+              <div className="qr-code-wrapper" aria-label="QR Code to scan and join the queue">
                 <QRCode
                   value={queueUrl}
                   size={180}

@@ -123,6 +123,7 @@ export default function AttendeePage() {
         <div className="wayfinding-controls" style={{ padding: '0 24px 20px' }}>
           <select
             className="form-select"
+            aria-label="Select Venue"
             style={{ maxWidth: '400px', border: '1px solid var(--accent-blue)' }}
             value={selectedVenue}
             onChange={(e) => {
@@ -148,6 +149,7 @@ export default function AttendeePage() {
         <div className="wayfinding-controls">
           <select
             className="form-select"
+            aria-label="Select zone to find on map"
             value={wayfindingFrom}
             onChange={(e) => setWayfindingFrom(e.target.value)}
           >
@@ -158,8 +160,9 @@ export default function AttendeePage() {
           </select>
           {wayfindingFrom && (
             <button
-              className="btn btn-secondary"
-              style={{ width: 'auto', minWidth: '100px', background: 'rgba(255, 45, 120, 0.1)', color: 'var(--ops-magenta)', border: '1px solid rgba(255, 45, 120, 0.3)' }}
+              className="btn"
+              aria-label="Reset map view"
+              style={{ width: 'auto', minWidth: '100px', background: 'var(--ops-magenta)', color: '#fff', border: 'none', fontWeight: 600 }}
               onClick={() => setWayfindingFrom('')}
             >
               RESET VIEW

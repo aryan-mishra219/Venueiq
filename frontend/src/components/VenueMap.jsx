@@ -224,6 +224,7 @@ export default function VenueMap({ zones, onReport, wayfindingFrom, wayfindingTo
                       className="zone-popup-btn crowded"
                       onClick={() => handleReport(zone.id, 'crowded')}
                       disabled={reportingZone === zone.id}
+                      aria-label="Report this zone as crowded"
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                     >
                       <AlertCircle size={14} /> Crowded
@@ -232,6 +233,7 @@ export default function VenueMap({ zones, onReport, wayfindingFrom, wayfindingTo
                       className="zone-popup-btn clear"
                       onClick={() => handleReport(zone.id, 'clear')}
                       disabled={reportingZone === zone.id}
+                      aria-label="Report this zone as clear"
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                     >
                       <CheckCircle size={14} /> Clear

@@ -188,7 +188,7 @@ async def get_queue_members(zone_id: str):
     """Get all active queue members for a zone (for staff dashboard)."""
     try:
         members_ref = db.collection("queues").document(zone_id).collection("members")
-        active_members = members_ref.where("status", "in", ["waiting", "your_turn"]).order_by("position").stream()
+        active_members = members_ref.where("status", "in", ["waiting", "your_turn"]).order_by("position").limit(100).stream()
         
         members = []
         for doc in active_members:

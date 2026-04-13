@@ -60,6 +60,7 @@ export default function ZoneCard({ zone, showActions = false, onReport, queueCou
           <button
             className="zone-card-btn danger"
             onClick={() => onReport(zone.id, 'crowded')}
+            aria-label={`Report ${zone.name} as crowded`}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
             <AlertCircle size={14} /> Report Crowded
@@ -67,6 +68,7 @@ export default function ZoneCard({ zone, showActions = false, onReport, queueCou
           <button
             className="zone-card-btn success"
             onClick={() => onReport(zone.id, 'clear')}
+            aria-label={`Report ${zone.name} as clear`}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
             <CheckCircle size={14} /> Report Clear

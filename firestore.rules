@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Is this request from a server (using Admin SDK)?
+    // Note: auth == null in client rules can't distinguish between backend and public user easily 
+    // without custom claims, but for this demo, we restrict write access to 'Admin Only' 
+    // patterns or logic.
+    
+    function isAdmin() {
+      // In a production environment with proper auth, we would check for claims.
+      // For this project specifically, the backend uses the Admin SDK which bypasses these rules.
+      // Therefore, we can set all public writes to 'false' to ensure ONLY the backend can modify telemetry.
+      return false; 
+    }
+
+    // 1. ZONES & VENUES: Real-time telemetry
+    // Public can read to see the map, but only Backend Admin can update scores.
+    match /venues/{venue} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /zones/{zone} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 2. QUEUES: Attendee Management
+    // Attendees need to be able to read their own status and join.
+    match /queues/{zoneId}/members/{memberId} {
+      allow read: if true;
+      // In a real app, we'd use anonymous auth and check request.auth.uid.
+      // For the demo, we allow creation if the data follows the schema.
+      allow create: if request.resource.data.size() <= 10; 
+      allow update, delete: if isAdmin();
+    }
+    
+    // 3. REGISTRY: Tracking
+    match /members_registry/{memberId} {
+      allow read: if true;
+      allow create: if request.resource.data.size() <= 5;
+      allow update, delete: if isAdmin();
+    }
+
+    // 4. ANNOUNCEMENTS: Broadcasts
+    match /announcements/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Default: Deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

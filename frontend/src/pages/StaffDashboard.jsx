@@ -5,9 +5,10 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, LayoutDashboard, Map, Users, Bell, Settings, Power, Zap, Mic } from 'lucide-react';
 import VenueMap from '../components/VenueMap';
+import StaffLogin from '../components/StaffLogin';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const STAFF_PASSWORD = 'venue2024';
+const STAFF_PASSWORD = import.meta.env.VITE_STAFF_PASSWORD || 'venue2024';
 
 // Helper: get congestion level from score
 const getLevel = (score) => score <= 3 ? 'nominal' : score <= 6 ? 'moderate' : 'dense';
@@ -89,15 +90,13 @@ export default function StaffDashboard() {
   }, [authenticated, zones]);
 
   // Login
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (password === STAFF_PASSWORD) {
+  const handleLogin = (enteredPassword) => {
+    if (enteredPassword === STAFF_PASSWORD) {
       setAuthenticated(true);
       sessionStorage.setItem('venueiq_staff_auth', 'true');
-      setLoginError('');
-    } else {
-      setLoginError('Invalid password. Please try again.');
+      return true;
     }
+    return false;
   };
 
   const handleLogout = () => {
@@ -221,30 +220,7 @@ export default function StaffDashboard() {
 
   // ===== LOGIN SCREEN =====
   if (!authenticated) {
-    return (
-      <div className="staff-login">
-        <form className="staff-login-card" onSubmit={handleLogin} style={{ background: 'var(--ops-surface)', borderColor: 'var(--ops-border)' }}>
-          <div className="staff-login-icon" style={{ background: 'var(--ops-cyan-dim)' }}><ShieldAlert size={28} color="var(--ops-cyan)" /></div>
-          <h2 style={{ fontFamily: 'var(--ops-mono)', color: 'var(--ops-cyan)', letterSpacing: '3px' }}>STAFF ACCESS</h2>
-          <p style={{ fontFamily: 'var(--ops-mono)', fontSize: '11px', color: 'var(--ops-text-dim)' }}>ENTER CREDENTIALS TO ACCESS COMMAND CENTER</p>
-          {loginError && <div className="staff-login-error">{loginError}</div>}
-          <div className="form-group">
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Enter staff password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              style={{ background: 'var(--ops-surface-2)', borderColor: 'var(--ops-border)', fontFamily: 'var(--ops-mono)' }}
-            />
-          </div>
-          <button type="submit" style={{ width: '100%', padding: '12px', background: 'var(--ops-cyan-dim)', border: '1px solid var(--ops-border-bright)', borderRadius: '6px', color: 'var(--ops-cyan)', fontFamily: 'var(--ops-mono)', fontSize: '12px', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
-            UNLOCK DASHBOARD
-          </button>
-        </form>
-      </div>
-    );
+    return <StaffLogin onLogin={handleLogin} />;
   }
 
   if (loading) {
@@ -270,16 +246,16 @@ export default function StaffDashboard() {
 
       <div className="ops-layout">
         <div className="ops-sidebar">
-          <div className="ops-sidebar-icon active" title="HUD"><LayoutDashboard size={18} /></div>
-          <div className="ops-sidebar-icon" title="Logout" onClick={handleLogout} style={{ color: 'var(--ops-magenta)', marginTop: 'auto' }}><Power size={18} /></div>
+          <button className="ops-sidebar-icon active" aria-label="HUD Dashboard" title="HUD" style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><LayoutDashboard size={18} aria-hidden="true" /></button>
+          <button className="ops-sidebar-icon" aria-label="Logout" title="Logout" onClick={handleLogout} style={{ background: 'transparent', border: 'none', color: 'var(--ops-magenta)', marginTop: 'auto', cursor: 'pointer' }}><Power size={18} aria-hidden="true" /></button>
         </div>
 
         {/* ===== LEFT COLUMN (HUD) ===== */}
         <div className="ops-left">
           {/* Brand */}
           <div className="ops-brand">
-            <div className="ops-brand-title">VENUEIQ</div>
-            <div className="ops-brand-sub">OPERATOR 042</div>
+            <div className="ops-brand-title" aria-label="Venue IQ">VENUEIQ</div>
+            <div className="ops-brand-sub" aria-label="Operator 042">OPERATOR 042</div>
           </div>
 
           {/* Total Occupancy */}
@@ -342,7 +318,7 @@ export default function StaffDashboard() {
           {/* Map Header */}
           <div className="ops-map-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span className="ops-map-tag">LIVE_FEED // SAT_LINK_04</span>
+              <span className="ops-map-tag" aria-label="Live Feed Satellite Link 04">LIVE_FEED // SAT_LINK_04</span>
               <span style={{ fontFamily: 'var(--ops-mono)', fontSize: '10px', color: 'var(--ops-text-dim)', letterSpacing: '1px' }}>
                 ACTIVE ZONES: {filteredZones.length}
               </span>
@@ -350,6 +326,7 @@ export default function StaffDashboard() {
             <button
               onClick={() => setShowLiveMap(!showLiveMap)}
               className="ops-action-btn cyan"
+              aria-label={showLiveMap ? "Switch to Heatmap view" : "Switch to Live Map view"}
               style={{ width: 'auto', padding: '6px 12px' }}
             >
               {showLiveMap ? 'SEE HEATMAP' : 'SEE ON MAP'}
@@ -448,7 +425,7 @@ export default function StaffDashboard() {
                 value={announcementMsg}
                 onChange={(e) => setAnnouncementMsg(e.target.value)}
               />
-              <button type="submit" disabled={sending}>
+              <button type="submit" disabled={sending} aria-label="Send Announcement">
                 {sending ? '...' : 'SEND'}
               </button>
             </form>
@@ -591,7 +568,7 @@ export default function StaffDashboard() {
                 <span className="ops-member-modal-title">
                   {zones.find(z => z.id === drillZoneId)?.name?.toUpperCase()} — LIVE QUEUE
                 </span>
-                <button className="ops-member-modal-close" onClick={() => setDrillZoneId(null)}>✕</button>
+                <button className="ops-member-modal-close" onClick={() => setDrillZoneId(null)} aria-label="Close live queue details">✕</button>
               </div>
 
               <table className="ops-member-table">
@@ -626,6 +603,7 @@ export default function StaffDashboard() {
                           className="ops-action-btn magenta"
                           style={{ padding: '4px 8px', flex: 'none' }}
                           onClick={() => handleRemoveMember(drillZoneId, member.id)}
+                          aria-label={`Remove user ${member.name} from queue`}
                         >
                           REMOVE
                         </button>
@@ -651,7 +629,7 @@ export default function StaffDashboard() {
                 >
                   CALL NEXT USER (SEND EMAIL)
                 </button>
-                <button className="ops-action-btn magenta" style={{ flex: 'none', padding: '8px 16px' }} onClick={() => setDrillZoneId(null)}>
+                <button className="ops-action-btn magenta" style={{ flex: 'none', padding: '8px 16px' }} onClick={() => setDrillZoneId(null)} aria-label="Close window">
                   CLOSE
                 </button>
               </div>
