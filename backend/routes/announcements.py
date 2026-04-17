@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from firebase_admin_setup import db
+from firebase_admin_setup import get_db
 from google.cloud.firestore_v1 import SERVER_TIMESTAMP
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
@@ -15,6 +15,7 @@ class AnnouncementRequest(BaseModel):
 async def send_announcement(request: AnnouncementRequest):
     """Send an announcement to a specific zone or all zones."""
     try:
+        db = get_db()
         announcement_data = {
             "message": request.message,
             "target_zone": request.target_zone,
@@ -32,6 +33,7 @@ async def send_announcement(request: AnnouncementRequest):
 async def get_recent_announcements():
     """Get the 20 most recent announcements."""
     try:
+        db = get_db()
         announcements_ref = db.collection("announcements")
         docs = announcements_ref.order_by("created_at", direction="DESCENDING").limit(20).stream()
         

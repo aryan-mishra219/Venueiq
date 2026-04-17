@@ -2,29 +2,45 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 import json
+from secret_manager import get_secret
+from logger import logger
 
 def initialize_firebase():
-    """Initialize Firebase Admin SDK with service account credentials."""
+    """
+    Initialize Firebase Admin SDK.
+    Prioritizes ASM-defined configuration, falling back to ADC for 
+    transparent authentication in Cloud Run.
+    """
     if not firebase_admin._apps:
-        # Option 1: Use service account JSON file
-        cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json")
-        
-        if os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
-        else:
-            # Option 2: Use environment variable with JSON string
-            cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-            if cred_json:
-                cred_dict = json.loads(cred_json)
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred)
+        # Check for service account JSON in Secret Manager (optional enhancement)
+        # For Cloud Run, simply initializing with ADC is the best practice.
+        try:
+            # 1. Resolve Firebase Project ID (The target for Firestore)
+            # We check secrets for FIREBASE_PROJECT_ID first, then env, then fallback to host project
+            firebase_project = get_secret("FIREBASE_PROJECT_ID") or get_secret("GOOGLE_CLOUD_PROJECT")
+            
+            if firebase_project:
+                cred = credentials.ApplicationDefault()
+                firebase_admin.initialize_app(cred, {
+                    'projectId': firebase_project,
+                })
+                logger.info(f"Firebase Admin initialized for project: {firebase_project}")
             else:
-                # Option 3: Fall back to Application Default Credentials (ADC)
-                # This works automatically on Cloud Run.
+                # Fallback to standard initialization (relies on ADC environment)
                 firebase_admin.initialize_app()
+                logger.info("Firebase Admin initialized using Application Default Credentials")
+        except Exception as e:
+            logger.error(f"Critical failure during Firebase initialization: {e}")
+            raise e
     
     return firestore.client()
 
-# Global Firestore client
-db = initialize_firebase()
+# Lazy Firestore client
+_db = None
+
+def get_db():
+    """Returns the initialized Firestore client, creating it if necessary."""
+    global _db
+    if _db is None:
+        _db = initialize_firebase()
+    return _db

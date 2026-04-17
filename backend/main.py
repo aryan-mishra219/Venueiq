@@ -1,18 +1,27 @@
+"""
+VenueIQ Core API
+Entry point for the VenueIQ crowd intelligence platform.
+Handles lifecycle events, health monitoring, and routing.
+"""
+import asyncio
+import signal
+import sys
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import asyncio
-from firebase_admin_setup import db
+
+from firebase_admin_setup import get_db
 from routes.zones import router as zones_router
 from routes.queue import router as queue_router
 from routes.announcements import router as announcements_router
-
+from logger import logger
 
 async def decay_crowd_scores():
     """Background task: decay all zone crowd_scores by 1 every 5 minutes."""
     while True:
-        await asyncio.sleep(300)  # 5 minutes
+        await asyncio.sleep(900)  # Reduced to 15 minutes to save Firestore Read Quota
         try:
+            db = get_db()
             zones_ref = db.collection("zones")
             docs = zones_ref.stream()
             for doc in docs:
@@ -22,40 +31,35 @@ async def decay_crowd_scores():
                     zones_ref.document(doc.id).update({
                         "crowd_score": current_score - 1
                     })
-            print("[CRON] Decayed crowd scores by 1")
+            logger.info("[CRON] Decayed crowd scores by 1 across all zones.")
         except Exception as e:
-            print(f"[CRON] Error decaying scores: {e}")
-
+            logger.error(f"[CRON] Error decaying scores: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage app lifecycle — start background tasks on startup."""
-    task = asyncio.create_task(decay_crowd_scores())
+    logger.info("VenueIQ Backend initialized and ready for traffic.")
+    decay_task = asyncio.create_task(decay_crowd_scores())
     yield
-    task.cancel()
+    logger.info("VenueIQ Backend is shutting down. Cancelling background tasks...")
+    decay_task.cancel()
     try:
-        await task
+        await decay_task
     except asyncio.CancelledError:
         pass
-
+    logger.info("Graceful shutdown complete.")
 
 app = FastAPI(
     title="VenueIQ API",
     description="Real-time crowd intelligence platform for large-scale sporting venues",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan
 )
 
 # CORS — allow frontend origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://*.vercel.app",
-        "https://venueiq-frontend-257323972871.us-central1.run.app",
-        "*"  # Allow all for development
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,17 +70,31 @@ app.include_router(zones_router)
 app.include_router(queue_router)
 app.include_router(announcements_router)
 
-
 @app.get("/")
 async def root():
     return {
         "name": "VenueIQ API",
-        "version": "1.0.0",
-        "status": "running",
-        "docs": "/docs"
+        "description": "Smart Crowd Management Platform",
+        "version": "1.1.0",
+        "region": "Bharat/Global",
+        "status": "healthy"
     }
-
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """Health check for Cloud Run monitoring."""
+    return {
+        "status": "healthy",
+        "service": "venueiq-backend",
+        "region": "asia-south1 (Mumbai)",
+        "version": "2.1.0-gold"
+    }
+
+def handle_exit_signal(sig, frame):
+    """Handle termination signals for safe exit."""
+    logger.info(f"Received signal {sig}. Initiating shutdown sequence...")
+    sys.exit(0)
+
+# Register signal handlers for Cloud Run termination
+signal.signal(signal.SIGTERM, handle_exit_signal)
+# Note: we let uvicorn handle SIGINT (Ctrl+C) for a cleaner console exit

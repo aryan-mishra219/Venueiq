@@ -117,13 +117,13 @@ export default function AttendeePage() {
       {/* Venue Selection Dropdown */}
       <div className="wayfinding-section" style={{ marginBottom: '16px', background: 'rgba(255, 255, 255, 0.03)' }}>
         <div className="section-title">
-          <Building2 size={16} className="section-title-icon" />
+          <Building2 size={16} className="section-title-icon" aria-hidden="true" />
           Current Venue
         </div>
         <div className="wayfinding-controls" style={{ padding: '0 24px 20px' }}>
           <select
             className="form-select"
-            aria-label="Select Venue"
+            aria-label="Select stadium venue for live updates"
             style={{ maxWidth: '400px', border: '1px solid var(--accent-blue)' }}
             value={selectedVenue}
             onChange={(e) => {
@@ -132,7 +132,7 @@ export default function AttendeePage() {
               setWayfindingTo('');
             }}
           >
-            <option value="">Select a venue...</option>
+            <option value="">Choose a venue...</option>
             {venues.map(v => (
               <option key={v.id} value={v.id}>{v.name} ({v.city})</option>
             ))}
@@ -143,17 +143,17 @@ export default function AttendeePage() {
       {/* Zone Search Controls */}
       <div className="wayfinding-section">
         <div className="section-title">
-          <Compass size={16} className="section-title-icon" />
+          <Compass size={16} className="section-title-icon" aria-hidden="true" />
           Find Zone
         </div>
         <div className="wayfinding-controls">
           <select
             className="form-select"
-            aria-label="Select zone to find on map"
+            aria-label="Select a gate, stand or stall to locate on the map"
             value={wayfindingFrom}
             onChange={(e) => setWayfindingFrom(e.target.value)}
           >
-            <option value="">Select a gate, stand or stall...</option>
+            <option value="">Select a zone...</option>
             {activeZones.map(zone => (
               <option key={zone.id} value={zone.id}>{zone.name}</option>
             ))}
@@ -161,7 +161,7 @@ export default function AttendeePage() {
           {wayfindingFrom && (
             <button
               className="btn"
-              aria-label="Reset map view"
+              aria-label="Reset map view to show all areas"
               style={{ width: 'auto', minWidth: '100px', background: 'var(--ops-magenta)', color: '#fff', border: 'none', fontWeight: 600 }}
               onClick={() => setWayfindingFrom('')}
             >

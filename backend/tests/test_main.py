@@ -7,7 +7,8 @@ def test_health_check_returns_200():
     """Verify that the API health check endpoint returns 200 OK and is healthy."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.json()["status"] == "healthy"
+    assert "service" in response.json()
 
 def test_read_root():
     """Verify the root endpoint meta information."""

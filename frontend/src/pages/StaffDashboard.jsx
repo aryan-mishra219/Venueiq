@@ -46,7 +46,9 @@ export default function StaffDashboard() {
   // Session
   useEffect(() => {
     const isAuth = sessionStorage.getItem('venueiq_staff_auth');
+    const storedPass = sessionStorage.getItem('venueiq_staff_pass');
     if (isAuth === 'true') setAuthenticated(true);
+    if (storedPass) setPassword(storedPass);
 
     const fetchVenues = async () => {
       try {
@@ -93,7 +95,9 @@ export default function StaffDashboard() {
   const handleLogin = (enteredPassword) => {
     if (enteredPassword === STAFF_PASSWORD) {
       setAuthenticated(true);
+      setPassword(enteredPassword);
       sessionStorage.setItem('venueiq_staff_auth', 'true');
+      sessionStorage.setItem('venueiq_staff_pass', enteredPassword);
       return true;
     }
     return false;
@@ -101,7 +105,9 @@ export default function StaffDashboard() {
 
   const handleLogout = () => {
     setAuthenticated(false);
+    setPassword('');
     sessionStorage.removeItem('venueiq_staff_auth');
+    sessionStorage.removeItem('venueiq_staff_pass');
   };
 
   // Advance queue (Optimistic UI)
@@ -120,20 +126,23 @@ export default function StaffDashboard() {
       const res = await fetch(`${API_URL}/queue/next`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zone_id: zoneId }),
+        body: JSON.stringify({ 
+          zone_id: zoneId,
+          password: password
+        }),
       });
       if (!res.ok) throw new Error('Failed to advance queue');
       const data = await res.json();
-      toast.success(data.next_position ? `Advanced — Next #${data.next_position}` : 'Queue empty');
+      toast.success(data.next_position ? `Authorized: Advancing to position #${data.next_position}` : 'Queue check complete: No waiting members');
 
       const now = new Date();
       const ts = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      setCommsLog(prev => [{ time: ts, sender: 'SYS_ADMIN', type: 'system', msg: `QUEUE ADVANCED FOR ZONE. EMAIL NOTIFICATION DISPATCHED.` }, ...prev].slice(0, 20));
+      setCommsLog(prev => [{ time: ts, sender: 'SYS_ADMIN', type: 'system', msg: `QUEUE ADVANCED FOR ZONE. NOTIFICATION DISPATCHED.` }, ...prev].slice(0, 20));
     } catch (err) {
       setQueueData(prev => ({ ...prev, [zoneId]: previousQueue }));
-      toast.error('Failed to advance queue');
+      toast.error('Unable to advance queue. Please verify connectivity.');
     }
-  }, [queueData]);
+  }, [queueData, password]);
 
   // Pause/resume (Optimistic UI)
   const handleTogglePause = useCallback(async (zoneId, currentlyPaused) => {
@@ -144,17 +153,21 @@ export default function StaffDashboard() {
       const res = await fetch(`${API_URL}/queue/pause`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zone_id: zoneId, paused: !currentlyPaused }),
+        body: JSON.stringify({ 
+          zone_id: zoneId, 
+          paused: !currentlyPaused,
+          password: password 
+        }),
       });
       if (!res.ok) throw new Error('Failed');
-      toast.success(!currentlyPaused ? 'Queue paused' : 'Queue resumed');
+      toast.success(!currentlyPaused ? 'Status: Queue Paused' : 'Status: Queue Resumed');
     } catch (err) {
       setZones(prev => prev.map(z =>
         z.id === zoneId ? { ...z, queue_paused: currentlyPaused } : z
       ));
-      toast.error('Failed to update queue');
+      toast.error('Command failed: Could not update queue status.');
     }
-  }, []);
+  }, [password]);
 
   // Remove member
   const handleRemoveMember = useCallback(async (zoneId, memberId) => {
@@ -166,7 +179,7 @@ export default function StaffDashboard() {
     } catch (err) {
       toast.error('Failed to remove member');
     }
-  }, []);
+  }, [password]);
 
   // Send announcement (via Comms)
   const handleSendAnnouncement = async (e) => {

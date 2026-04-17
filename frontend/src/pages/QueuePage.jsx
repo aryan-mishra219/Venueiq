@@ -34,35 +34,46 @@ export default function QueuePage() {
         }
       } catch (err) {
         console.error('Failed to fetch venues:', err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchVenues();
   }, []);
 
-  // Load Zones (Real-time) and handle deep-linking
+  // Load Zones (Fallback-aware API fetch)
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'zones'),
-      (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setZones(data);
-        setLoading(false);
+    if (!selectedVenue) {
+      setZones([]);
+      return;
+    }
 
-        // Handle Deep Linking from QR Code URL Params (?venue=xxx&zone=yyy)
-        const params = new URLSearchParams(window.location.search);
-        const urlVenue = params.get('venue');
-        const urlZone = params.get('zone');
-
-        if (urlVenue) setSelectedVenue(urlVenue);
-        if (urlZone) setSelectedZone(urlZone);
-      },
-      (error) => {
-        console.error('Firestore zones listener error:', error);
-        setLoading(false);
-        toast.error(`Failed to load live zone data: ${error.message}`);
+    const fetchZones = async () => {
+      try {
+        const res = await fetch(`${API_URL}/zones/all?venue_id=${selectedVenue}`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setZones(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch zones:', err);
       }
-    );
-    return () => unsubscribe();
+    };
+
+    fetchZones();
+    // Re-fetch every 30 seconds as a lighter alternative to onSnapshot during quota stress
+    const interval = setInterval(fetchZones, 30000);
+    return () => clearInterval(interval);
+  }, [selectedVenue]);
+
+  // Handle Init and Deep Linking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlVenue = params.get('venue');
+    const urlZone = params.get('zone');
+    if (urlVenue) setSelectedVenue(urlVenue);
+    if (urlZone) setSelectedZone(urlZone);
   }, []);
 
   // Derived filtered zones based on selected venue
