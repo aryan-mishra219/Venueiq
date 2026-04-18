@@ -60,3 +60,35 @@ def setup_logger():
 
 # Initialize singleton logger
 logger = setup_logger()
+
+# 3. Managed Audit Trail (GCS Integration)
+def critical_audit(event_name: str, payload: dict) -> None:
+    """
+    Archives high-priority safety or operational events to Google Cloud Storage.
+    Fulfills 'Deep Storage Integration' and 'Data Residency' (asia-south1) requirements.
+    """
+    from google.cloud import storage
+    
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "venueiq-production")
+    logger.critical(f"[AUDIT] {event_name}: {payload}")
+
+    try:
+        storage_client = storage.Client(project=project_id)
+        bucket_name = f"venueiq-audit-logs-{project_id}"
+        
+        # Pull or Create the Audit Bucket (Simulated for high resilience)
+        bucket = storage_client.lookup_bucket(bucket_name)
+        if not bucket:
+            # We enforce residency in asia-south1 (Mumbai) for regulatory compliance
+            bucket = storage_client.create_bucket(bucket_name, location="asia-south1")
+            logger.info(f"Initialized localized GCS Audit Bucket: {bucket_name}")
+            
+        blob_name = f"audit_trail/{event_name}_{os.urandom(4).hex()}.json"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(
+            data=json.dumps(payload, indent=2),
+            content_type='application/json'
+        )
+    except Exception as e:
+        # Fail-silent telemetry: stadium throughput must never depend on audit latency
+        logger.warning(f"GCS Audit Telemetry Bypass: {e}")
